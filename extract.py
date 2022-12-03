@@ -4,9 +4,11 @@ import struct
 import os
 import sys
 import numpy as np
+from multiprocessing import Pool
+from tqdm import tqdm
 
 # 32 Bits module
-global mod, mod1
+global mod, mod1, f
 mod = 2 ** 32
 mod1 = 2 ** 31
 
@@ -33,7 +35,7 @@ def dd(data, k):
 
 
 # Parse file header and get file list & location for decrypt
-def getInfo(f):
+def getInfo():
     f.seek(0)
     header = f.read(1024)
     num = 0
@@ -49,24 +51,26 @@ def getInfo(f):
     return out
 
 # Locate position, create file, then write decrypted binaries
-def extract(f, files, out):
-    for name, p, l, k in files:
-        print("Extracting file %s ..." % name, end="")
-        name = os.path.join(out, name)
-        os.makedirs(os.path.dirname(name), exist_ok=True)
-        with open(name, "wb") as o:
-            f.seek(p)
-            data = dd(f.read(l), k)
-            o.write(data)
-            print("Done.", end="\n")
+def extract(files):
+    name, p, l, k = files
+    os.makedirs(os.path.dirname(name), exist_ok=True)
+    with open(name, "wb") as o:
+        f.seek(p)
+        data = dd(f.read(l), k)
+        o.write(data)
+    return name
+
+f = open(sys.argv[1], "rb")
 
 # Entry: argv1-> .dat file path; argv2-> output path
 if __name__ == "__main__":
-    path = sys.argv[1]
-    f = open(path, "rb")
-    files = getInfo(f)
+    files = getInfo()
     if len(sys.argv) == 3:
-        extract(f, files, sys.argv[2])
+        files = [(os.path.join(sys.argv[2], name), p, l, k) for name, p, l, k in files]
+        with Pool(processes=6) as pool:
+            for _ in tqdm(pool.imap_unordered(extract, files), total=len(files)):
+                pass
+
     elif len(sys.argv) == 2:
         for item in files:
             print(item[0], item[2], "\tKByte(s)")
